@@ -8,6 +8,7 @@ import IncidentReviewPage from './pages/IncidentReviewPage';
 import AnalysisPage       from './pages/AnalysisPage';
 import AuditLogPage       from './pages/AuditLogPage';
 import SettingsPage       from './pages/SettingsPage';
+import FaceRegisterPage from "./pages/FaceRegisterPage";
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/analysis"   element={<AnalysisPage />} />
         <Route path="/audit"      element={<AuditLogPage />} />
         <Route path="/settings"   element={<SettingsPage />} />
+        <Route path="/face-register" element={<FaceRegisterPage/>} />
         {/* Catch-all */}
         <Route path="*"           element={<Navigate to="/" replace />} />
       </Routes>

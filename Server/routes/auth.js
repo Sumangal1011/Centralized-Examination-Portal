@@ -4,24 +4,37 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 
-// Generate JWT token
+// Generate JWT Token
 const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: '30d',
-  });
+  return jwt.sign(
+    { id },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: '30d',
+    }
+  );
 };
 
-// @route   POST /api/auth/register
-// @desc    Register a new user
-// @access  Public
+// =============================
+// REGISTER USER
+// POST /api/auth/register
+// =============================
 router.post('/register', async (req, res) => {
-  const { uid, name, password, role, avatar } = req.body;
-
   try {
+    const {
+      uid,
+      name,
+      password,
+      role,
+      avatar,
+    } = req.body;
+
     const userExists = await User.findOne({ uid });
 
     if (userExists) {
-      return res.status(400).json({ message: 'User already exists' });
+      return res.status(400).json({
+        message: 'User already exists',
+      });
     }
 
     const user = await User.create({
@@ -32,70 +45,137 @@ router.post('/register', async (req, res) => {
       avatar: avatar || '',
     });
 
-    if (user) {
-      res.status(201).json({
-        _id: user._id,
-        uid: user.uid,
-        name: user.name,
-        role: user.role,
-        avatar: user.avatar,
-        token: generateToken(user._id),
-      });
-    } else {
-      res.status(400).json({ message: 'Invalid user data' });
-    }
+    res.status(201).json({
+      _id: user._id,
+      uid: user.uid,
+      name: user.name,
+      role: user.role,
+      avatar: user.avatar,
+      token: generateToken(user._id),
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error(error);
+
+    res.status(500).json({
+      message: error.message,
+    });
   }
 });
 
-// @route   POST /api/auth/login
-// @desc    Authenticate user & get token
-// @access  Public
+// =============================
+// LOGIN USER
+// POST /api/auth/login
+// =============================
 router.post('/login', async (req, res) => {
-  const { uid, password, role } = req.body;
-
   try {
+    const {
+      uid,
+      password,
+      role,
+    } = req.body;
+
     const user = await User.findOne({ uid });
 
     if (!user) {
-      return res.status(401).json({ message: 'Invalid University ID or Password' });
-    }
-
-    // Optional safety role match check
-    if (role && user.role !== role) {
-      return res.status(401).json({ message: `Access denied. Selected role does not match account.` });
-    }
-
-    const isMatch = await user.comparePassword(password);
-
-    if (isMatch) {
-      res.json({
-        _id: user._id,
-        uid: user.uid,
-        name: user.name,
-        role: user.role,
-        avatar: user.avatar,
-        token: generateToken(user._id),
+      return res.status(401).json({
+        message:
+          'Invalid University ID or Password',
       });
-    } else {
-      res.status(401).json({ message: 'Invalid University ID or Password' });
     }
+
+    if (role && user.role !== role) {
+      return res.status(401).json({
+        message:
+          'Selected role does not match account',
+      });
+    }
+
+    const isMatch =
+      await user.comparePassword(password);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        message:
+          'Invalid University ID or Password',
+      });
+    }
+
+    res.json({
+      _id: user._id,
+      uid: user.uid,
+      name: user.name,
+      role: user.role,
+      avatar: user.avatar,
+      token: generateToken(user._id),
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error(error);
+
+    res.status(500).json({
+      message: error.message,
+    });
   }
 });
 
-// @route   GET /api/auth/me
-// @desc    Get user profile
-// @access  Private
-router.get('/me', protect, async (req, res) => {
+// =============================
+// REGISTER FACE
+// POST /api/auth/register-face
+// =============================
+router.post('/register-face', async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
-    res.json(user);
+    const {
+      uid,
+      descriptor,
+    } = req.body;
+
+    const user = await User.findOne({ uid });
+
+    if (!user) {
+      return res.status(404).json({
+        message: 'User not found',
+      });
+    }
+
+    user.faceDescriptor = descriptor;
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message:
+        'Face registered successfully',
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error(error);
+
+    res.status(500).json({
+      message: error.message,
+    });
   }
 });
+
+// =============================
+// CURRENT USER
+// GET /api/auth/me
+// =============================
+router.get(
+  '/me',
+  protect,
+  async (req, res) => {
+    try {
+      const user =
+        await User.findById(req.user._id)
+          .select('-password');
+
+      res.json(user);
+    } catch (error) {
+      console.error(error);
+
+      res.status(500).json({
+        message: error.message,
+      });
+    }
+  }
+);
 
 module.exports = router;

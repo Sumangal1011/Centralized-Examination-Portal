@@ -1,164 +1,254 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { X, ShieldCheck } from 'lucide-react';
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { X, ShieldCheck } from "lucide-react";
+import * as faceapi from "face-api.js";
 
 export default function IdentityCheckPage() {
   const navigate = useNavigate();
-  const [stage, setStage] = useState('analyzing'); // analyzing | matched
+
+  const [loading, setLoading] = useState(true);
+  const [faceDetected, setFaceDetected] = useState(false);
   const [confidence, setConfidence] = useState(0);
 
-  const user = JSON.parse(localStorage.getItem('user') || '{"name": "Alex Johnson"}');
+  const videoRef = useRef(null);
+
+  const user = JSON.parse(
+    localStorage.getItem("user") || '{"name":"Student"}'
+  );
 
   useEffect(() => {
-    const t1 = setTimeout(() => setStage('matched'), 2200);
-    return () => clearTimeout(t1);
+    loadModels();
+    startCamera();
+
+    return () => {
+      if (videoRef.current?.srcObject) {
+        videoRef.current.srcObject
+          .getTracks()
+          .forEach((track) => track.stop());
+      }
+    };
   }, []);
 
-  useEffect(() => {
-    if (stage === 'matched') {
-      let c = 0;
-      const interval = setInterval(() => {
-        c += 2;
-        setConfidence(c);
-        if (c >= 98) clearInterval(interval);
-      }, 18);
-      return () => clearInterval(interval);
+  const loadModels = async () => {
+    try {
+      await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
+      await faceapi.nets.faceLandmark68Net.loadFromUri("/models");
+      await faceapi.nets.faceRecognitionNet.loadFromUri("/models");
+
+      setLoading(false);
+      detectFace();
+    } catch (err) {
+      console.error("Model loading failed:", err);
     }
-  }, [stage]);
+  };
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+      });
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      console.error("Camera access denied:", err);
+      alert("Please allow camera access.");
+    }
+  };
+
+  const detectFace = () => {
+    const interval = setInterval(async () => {
+      if (!videoRef.current) return;
+
+      const detection = await faceapi.detectSingleFace(
+        videoRef.current,
+        new faceapi.TinyFaceDetectorOptions()
+      );
+
+      if (detection) {
+        setFaceDetected(true);
+
+        setConfidence((prev) => {
+          if (prev >= 98) {
+            clearInterval(interval);
+            return 98;
+          }
+          return prev + 2;
+        });
+      } else {
+        setFaceDetected(false);
+        setConfidence(0);
+      }
+    }, 500);
+  };
 
   return (
     <div className="page-wrapper">
-      {/* Top bar */}
+      {/* Top Bar */}
       <div className="top-bar">
-        <button onClick={() => navigate('/')} aria-label="Close" style={{ color: 'var(--clr-primary)' }}>
+        <button
+          onClick={() => navigate("/")}
+          aria-label="Close"
+          style={{ color: "var(--clr-primary)" }}
+        >
           <X size={24} />
         </button>
-        <span className="top-bar-title" style={{ flex: 1, marginLeft: 12 }}>ExamAI</span>
-        <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--clr-border)', overflow: 'hidden' }}>
-          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,#64748b,#0f172a)' }} />
-        </div>
+
+        <span
+          className="top-bar-title"
+          style={{ flex: 1, marginLeft: 12 }}
+        >
+          ExamAI
+        </span>
+
+        <div
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: "50%",
+            background: "var(--clr-border)",
+          }}
+        />
       </div>
 
-      <div className="page-content" style={{ paddingBottom: 40 }}>
-        <h1 style={{ fontSize: 'var(--fs-headline-lg)', fontWeight: 700, textAlign: 'center', marginBottom: 8 }}>
+      <div
+        className="page-content"
+        style={{ paddingBottom: 40 }}
+      >
+        <h1
+          style={{
+            fontSize: "var(--fs-headline-lg)",
+            fontWeight: 700,
+            textAlign: "center",
+          }}
+        >
           Identity Check
         </h1>
-        <p style={{ color: 'var(--clr-neutral)', textAlign: 'center', fontSize: 'var(--fs-body-md)', marginBottom: 28 }}>
-          Position your face within the guide for AI verification.
+
+        <p
+          style={{
+            color: "var(--clr-neutral)",
+            textAlign: "center",
+            marginBottom: 24,
+          }}
+        >
+          Position your face within the frame for AI verification.
         </p>
 
-        {/* Camera frame */}
-        <div style={{ position: 'relative', borderRadius: 'var(--r-md)', overflow: 'hidden', marginBottom: 20 }}>
-          {/* Placeholder gradient "camera" */}
-          <div style={{
-            width: '100%',
-            paddingBottom: '120%',
-            background: 'linear-gradient(160deg, #1e293b 0%, #334155 50%, #0f172a 100%)',
-            position: 'relative',
-          }}>
-            {/* Face silhouette */}
-            <div style={{
-              position: 'absolute', top: '50%', left: '50%',
-              transform: 'translate(-50%,-50%)',
-              width: '55%', height: '70%',
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,.08)',
-            }} />
+        {/* Camera */}
+        <div
+          style={{
+            position: "relative",
+            borderRadius: "16px",
+            overflow: "hidden",
+            marginBottom: 20,
+          }}
+        >
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            style={{
+              width: "100%",
+              height: "500px",
+              objectFit: "cover",
+              background: "#000",
+            }}
+          />
 
-            {/* Corner brackets */}
-            {[
-              { top: '12%', left: '14%', borderTop: '3px solid', borderLeft: '3px solid' },
-              { top: '12%', right: '14%', borderTop: '3px solid', borderRight: '3px solid' },
-              { bottom: '12%', left: '14%', borderBottom: '3px solid', borderLeft: '3px solid' },
-              { bottom: '12%', right: '14%', borderBottom: '3px solid', borderRight: '3px solid' },
-            ].map((s, i) => (
-              <div key={i} style={{
-                position: 'absolute', width: 28, height: 28,
-                borderColor: 'var(--clr-ai-blue)',
-                borderRadius: 3,
-                ...s,
-              }} />
-            ))}
+          <div
+            style={{
+              position: "absolute",
+              top: "15%",
+              left: "20%",
+              width: "60%",
+              height: "70%",
+              border: `3px solid ${
+                faceDetected ? "#10b981" : "#3b82f6"
+              }`,
+              borderRadius: "50%",
+            }}
+          />
 
-            {/* Face oval outline */}
-            <div style={{
-              position: 'absolute', top: '18%', left: '22%', right: '22%', bottom: '14%',
-              border: `2.5px solid var(--clr-ai-blue)`,
-              borderRadius: '50%',
-              animation: stage === 'analyzing' ? 'pulse-glow 1.5s infinite' : 'none',
-            }} />
-
-            {/* AI Analyzing badge */}
-            <div style={{
-              position: 'absolute', top: 14, left: 14,
-              background: 'rgba(255,255,255,.92)',
-              borderRadius: 'var(--r-full)',
-              padding: '5px 12px',
-              fontSize: 'var(--fs-label-sm)',
+          <div
+            style={{
+              position: "absolute",
+              top: 12,
+              left: 12,
+              background: "#fff",
+              padding: "8px 14px",
+              borderRadius: "999px",
               fontWeight: 600,
-              display: 'flex', alignItems: 'center', gap: 6,
-              color: 'var(--clr-primary)',
-            }}>
-              <span style={{
-                width: 8, height: 8, borderRadius: '50%',
-                background: stage === 'analyzing' ? 'var(--clr-ai-blue)' : 'var(--clr-low)',
-                animation: stage === 'analyzing' ? 'pulse-glow .8s infinite' : 'none',
-              }} />
-              {stage === 'analyzing' ? 'AI Analyzing…' : 'Verified ✓'}
-            </div>
+            }}
+          >
+            {loading
+              ? "Loading AI..."
+              : faceDetected
+              ? "Face Detected ✓"
+              : "Searching Face..."}
           </div>
         </div>
 
-        {/* Match result card */}
-        {stage === 'matched' && (
-          <div className="card fade-in" style={{ marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{
-                width: 56, height: 56, borderRadius: 'var(--r-md)',
-                background: 'var(--clr-ai-blue-bg)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <ShieldCheck size={26} color="var(--clr-ai-blue)" />
-              </div>
+        {/* Result Card */}
+        {faceDetected && (
+          <div
+            className="card"
+            style={{ marginBottom: 20 }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <ShieldCheck
+                size={32}
+                color="#10b981"
+              />
+
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 'var(--fs-body-md)' }}>Match Found</div>
-                <div style={{ color: 'var(--clr-neutral)', fontSize: 'var(--fs-label-md)' }}>{user.name}</div>
+                <h3>{user.name}</h3>
+                <small>Identity Verified</small>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 'var(--fs-label-sm)', color: 'var(--clr-ai-blue)', fontWeight: 600, marginBottom: 2 }}>Confidence</div>
-                <div style={{ fontSize: 'var(--fs-headline-md)', fontWeight: 700, color: 'var(--clr-ai-blue)' }}>{confidence.toFixed(1)}%</div>
+
+              <div>
+                <strong>{confidence}%</strong>
               </div>
             </div>
-            <div className="progress-track" style={{ marginTop: 14 }}>
-              <div className="progress-fill ai" style={{ width: `${confidence}%` }} />
+
+            <div
+              style={{
+                marginTop: 12,
+                height: 8,
+                background: "#e5e7eb",
+                borderRadius: 999,
+              }}
+            >
+              <div
+                style={{
+                  height: "100%",
+                  width: `${confidence}%`,
+                  background: "#10b981",
+                  borderRadius: 999,
+                }}
+              />
             </div>
           </div>
         )}
 
-        {/* Security note */}
-        <div style={{
-          background: 'var(--clr-surface-low)',
-          border: '1px solid var(--clr-border)',
-          borderRadius: 'var(--r-md)',
-          padding: '12px 14px',
-          display: 'flex', alignItems: 'flex-start', gap: 10,
-          fontSize: 'var(--fs-label-md)',
-          color: 'var(--clr-neutral)',
-          marginBottom: 28,
-        }}>
-          <ShieldCheck size={16} style={{ flexShrink: 0, marginTop: 2, color: 'var(--clr-ai-blue)' }} />
-          <span>
-            Face biometric authenticated against system records. Proctoring level is set to{' '}
-            <span style={{ color: 'var(--clr-ai-blue)', fontWeight: 600 }}>Secure High</span>.
-          </span>
-        </div>
-
         <button
-          id="btn-proceed-exam"
           className="btn btn-primary"
-          disabled={stage === 'analyzing'}
-          onClick={() => navigate('/exam')}
-          style={{ opacity: stage === 'analyzing' ? .5 : 1 }}
+          disabled={!faceDetected || confidence < 90}
+          onClick={() => navigate("/exam")}
+          style={{
+            opacity:
+              !faceDetected || confidence < 90
+                ? 0.5
+                : 1,
+          }}
         >
           Proceed to Exam →
         </button>
