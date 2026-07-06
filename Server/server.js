@@ -34,7 +34,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+//const PORT = process.env.PORT || 5000;
 
 // Connect to MongoDB then start listening
 connectDB()
@@ -43,7 +43,7 @@ connectDB()
     console.log("Host:", mongoose.connection.host);
 
     app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
+      console.log(`Server is running on port ${process.env.PORT}`);
     });
   })
   .catch((err) => {

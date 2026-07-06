@@ -1,4 +1,8 @@
-require('dotenv').config();
+const path = require('path')
+require('dotenv').config({
+  path: path.resolve(__dirname, '../.env')
+});
+
 
 const mongoose = require('mongoose');
 const User = require('../models/User');
@@ -23,41 +27,44 @@ const seedData = async () => {
     console.log('Existing database records cleared.');
 
     // Create Users
-    const student = new User({
+    const student1 = new User({
       uid: 'L-12345678',
       name: 'Alex Johnson',
       password: 'student123',
-      role: 'student',
-      avatar:
-        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256',
+      role: 'student'
     });
 
-    const examiner = new User({
+    const examiner1 = new User({
       uid: 'E-98765432',
       name: 'Dr. Sarah Jenkins',
       password: 'examiner123',
-      role: 'examiner',
-      avatar:
-        'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=256',
+      role: 'examiner'
     });
 
-    const admin = new User({
+    const admin1 = new User({
       uid: 'A-11112222',
       name: 'Super Admin',
       password: 'admin123',
-      role: 'admin',
-      avatar:
-        'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=256',
+      role: 'admin'
     });
+     const student2 = new User({
+      uid: 'S-20600223055',
+      name: 'Sumangal Kayal',
+      password: 'sumangal.123',
+      role: 'student'
+      });
 
-    const savedStudent = await student.save();
-    console.log('Student Saved:', savedStudent._id);
+    const savedStudent1 = await student1.save();
+    console.log('Student Saved:', savedStudent1._id);
 
-    const savedExaminer = await examiner.save();
-    console.log('Examiner Saved:', savedExaminer._id);
+    const savedExaminer1 = await examiner1.save();
+    console.log('Examiner Saved:', savedExaminer1._id);
 
-    const savedAdmin = await admin.save();
-    console.log('Admin Saved:', savedAdmin._id);
+    const savedAdmin1 = await admin1.save();
+    console.log('Admin Saved:', savedAdmin1._id);
+
+    const savedStudent2 = await student2.save();
+    console.log('Student Saved:', savedStudent2._id);
 
     console.log(
       'User Count:',

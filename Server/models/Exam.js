@@ -14,7 +14,7 @@ const QuestionSchema = new mongoose.Schema({
     enum: ['MULTIPLE CHOICE', 'TRUE OR FALSE', 'SHORT ANSWER'],
     default: 'MULTIPLE CHOICE',
   },
-  points: {
+  marks: {
     type: Number,
     default: 1,
   },
