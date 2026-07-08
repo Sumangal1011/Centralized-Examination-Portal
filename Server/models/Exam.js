@@ -45,6 +45,11 @@ const ExamSchema = new mongoose.Schema({
     default: 60,
   },
   questions: [QuestionSchema],
+  status: {
+    type: String,
+    enum: ['draft', 'active', 'closed'],
+    default: 'active',
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

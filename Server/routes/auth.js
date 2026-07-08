@@ -27,6 +27,7 @@ router.post('/register', async (req, res) => {
       password,
       role,
       avatar,
+      photoLink,
     } = req.body;
 
     const userExists = await User.findOne({ uid });
@@ -43,6 +44,7 @@ router.post('/register', async (req, res) => {
       password,
       role: role || 'student',
       avatar: avatar || '',
+      photoLink: photoLink || '',
     });
 
     res.status(201).json({
@@ -51,6 +53,7 @@ router.post('/register', async (req, res) => {
       name: user.name,
       role: user.role,
       avatar: user.avatar,
+      photoLink: user.photoLink,
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -106,6 +109,8 @@ router.post('/login', async (req, res) => {
       name: user.name,
       role: user.role,
       avatar: user.avatar,
+      photoLink: user.photoLink || '',
+      faceImageLink: user.faceImageLink || '',
       token: generateToken(user._id),
     });
   } catch (error) {

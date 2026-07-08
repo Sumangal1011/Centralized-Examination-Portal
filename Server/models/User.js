@@ -21,11 +21,19 @@ const UserSchema = new mongoose.Schema({
     enum: ['student', 'examiner', 'admin'],
     default: 'student',
   },
-    faceDescriptor: {
-  type: [Number],
-  default: []
-},
-    createdAt: {
+  faceDescriptor: {
+    type: [Number],
+    default: []
+  },
+  faceImageLink: {
+    type: String,
+    default: ''
+  },
+  photoLink: {
+    type: String,
+    default: ''
+  },
+  createdAt: {
     type: Date,
     default: Date.now,
   },

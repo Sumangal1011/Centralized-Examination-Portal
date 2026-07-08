@@ -7,7 +7,7 @@ const { protect, authorize } = require('../middleware/auth');
 // @desc    Upload/Create a new exam paper
 // @access  Private/Admin
 router.post('/create', protect, authorize('admin'), async (req, res) => {
-  const { title, subject, duration, questions } = req.body;
+  const { title, subject, duration, questions, status } = req.body;
 
   try {
     if (!questions || questions.length === 0) {
@@ -19,6 +19,7 @@ router.post('/create', protect, authorize('admin'), async (req, res) => {
       subject,
       duration,
       questions,
+      status: status || 'active',
       createdBy: req.user._id,
     });
 
@@ -35,18 +36,20 @@ router.get('/list', protect, async (req, res) => {
   try {
     const exams = await Exam.find().populate('createdBy', 'name');
 
-    // Secure answers for student view
+    // Secure answers for student view — also only show active exams
     if (req.user.role === 'student') {
-      const sanitizedExams = exams.map(exam => {
-        const examObj = exam.toObject();
-        if (examObj.questions) {
-          examObj.questions = examObj.questions.map(q => {
-            const { correctOption, ...rest } = q;
-            return rest;
-          });
-        }
-        return examObj;
-      });
+      const sanitizedExams = exams
+        .filter(exam => exam.status === 'active')
+        .map(exam => {
+          const examObj = exam.toObject();
+          if (examObj.questions) {
+            examObj.questions = examObj.questions.map(q => {
+              const { correctOption, ...rest } = q;
+              return rest;
+            });
+          }
+          return examObj;
+        });
       return res.json(sanitizedExams);
     }
 
@@ -80,6 +83,34 @@ router.get('/:id', protect, async (req, res) => {
     }
 
     res.json(examObj);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// @route   PATCH /api/exam/:id/status
+// @desc    Update exam status (active/draft/closed)
+// @access  Private/Admin/Examiner
+router.patch('/:id/status', protect, authorize('admin', 'examiner'), async (req, res) => {
+  const { status } = req.body;
+  const validStatuses = ['draft', 'active', 'closed'];
+
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ message: 'Invalid status. Must be draft, active, or closed.' });
+  }
+
+  try {
+    const exam = await Exam.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+
+    if (!exam) {
+      return res.status(404).json({ message: 'Exam paper not found' });
+    }
+
+    res.json(exam);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

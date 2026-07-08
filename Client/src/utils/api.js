@@ -31,10 +31,10 @@ export const authAPI = {
       method: 'POST',
       body: JSON.stringify({ uid, password, role }),
     }),
-  register: (uid, name, password, role) =>
+  register: (uid, name, password, role, photoLink = '') =>
     apiRequest('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ uid, name, password, role }),
+      body: JSON.stringify({ uid, name, password, role, photoLink }),
     }),
   me: () => apiRequest('/auth/me'),
 };
@@ -47,16 +47,24 @@ export const examAPI = {
     }),
   list: () => apiRequest('/exam/list'),
   getById: (id) => apiRequest(`/exam/${id}`),
+  updateStatus: (id, status) =>
+    apiRequest(`/exam/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
 };
 
 export const submissionAPI = {
-  submit: (examId, answers) =>
+  submit: (examId, answers, status = 'submitted') =>
     apiRequest('/submission/submit', {
       method: 'POST',
-      body: JSON.stringify({ examId, answers }),
+      body: JSON.stringify({ examId, answers, status }),
     }),
   list: () => apiRequest('/submission/list'),
   getMySubmissions: () => apiRequest('/submission/my-submissions'),
+  getReview: (examId) => apiRequest(`/submission/review/${examId}`),
+  checkSubmission: (examId) => apiRequest(`/submission/check/${examId}`),
+  getExamSubmissions: (examId) => apiRequest(`/submission/exam/${examId}`),
 };
 
 export const incidentAPI = {

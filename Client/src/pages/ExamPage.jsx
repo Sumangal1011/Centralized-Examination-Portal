@@ -1,22 +1,29 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bookmark, ChevronLeft } from 'lucide-react';
+import { Bookmark, ChevronLeft, AlertTriangle } from 'lucide-react';
 import { examAPI, submissionAPI, incidentAPI } from '../utils/api';
 
 export default function ExamPage() {
   const navigate = useNavigate();
-  const [exams, setExams] = useState([]);
-  const [activeExamIndex, setActiveExamIndex] = useState(0);
+  const [exam, setExam] = useState(null);
   const [qIndex, setQIndex] = useState(0);
   const [selected, setSelected] = useState({});
   const [bookmarked, setBookmarked] = useState({});
-  const [timeLeft, setTimeLeft] = useState(0); // seconds
+  const [timeLeft, setTimeLeft] = useState(0);
   const [showMonitor, setShowMonitor] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [warningsCount, setWarningsCount] = useState(0);
+  const [showWarningModal, setShowWarningModal] = useState(false);
+  const [verifiedPhoto, setVerifiedPhoto] = useState(null);
+  const [alreadySubmitted, setAlreadySubmitted] = useState(false);
 
-  const exam = exams[activeExamIndex];
+  useEffect(() => {
+    const photo = localStorage.getItem('verifiedPhoto');
+    if (photo) setVerifiedPhoto(photo);
+  }, []);
+
   const questions = exam ? exam.questions : [];
   const q = questions[qIndex];
   const progress = questions.length > 0 ? Math.round(((qIndex + 1) / questions.length) * 100) : 0;
@@ -33,9 +40,9 @@ export default function ExamPage() {
           eventSub: 'Candidate finished and submitted the assessment.',
           eventType: 'submit',
         });
-      } catch (e) {
-        // ignore log error
-      }
+      } catch (e) { /* ignore log error */ }
+      // Clear selectedExamId after submission
+      localStorage.removeItem('selectedExamId');
       navigate('/dashboard');
     } catch (err) {
       alert('Error submitting exam: ' + err.message);
@@ -44,36 +51,84 @@ export default function ExamPage() {
     }
   }, [exam, selected, navigate]);
 
-  useEffect(() => {
-    const fetchExams = async () => {
+  const handleCancelExam = useCallback(async (currentSelected = selected, currentExam = exam) => {
+    if (!currentExam) return;
+    setSubmitting(true);
+    try {
+      await submissionAPI.submit(currentExam._id, currentSelected, 'cancelled');
       try {
-        const data = await examAPI.list();
-        setExams(data);
-        if (data.length > 0) {
-          setTimeLeft(data[0].duration * 60);
-          // Register start of exam in incidents
-          try {
-            await incidentAPI.report({
-              examId: data[0]._id,
-              eventLabel: 'Exam Started',
-              eventSub: 'Candidate entered and initialized exam environment.',
-              eventType: 'start',
-            });
-          } catch (e) {
-            console.error('Failed to log exam start event:', e);
+        await incidentAPI.report({
+          examId: currentExam._id,
+          riskScore: 100,
+          eventLabel: 'Exam Automatically Cancelled',
+          eventSub: 'Exam cancelled automatically due to exceeding tab switch limit (4 tab switches detected).',
+          eventType: 'tab_switch',
+          incidentSnapshot: verifiedPhoto || '',
+        });
+      } catch (e) { /* ignore log error */ }
+      localStorage.removeItem('selectedExamId');
+      alert('Your exam has been automatically CANCELLED because you switched tabs more than 3 times!');
+      navigate('/dashboard');
+    } catch (err) {
+      alert('Error submitting cancelled exam: ' + err.message);
+      navigate('/dashboard');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [exam, selected, navigate, verifiedPhoto]);
+
+  // Load the specific exam selected by the student
+  useEffect(() => {
+    const fetchExam = async () => {
+      try {
+        // Get the selected exam ID from localStorage (set by ExamSelectPage)
+        const selectedExamId = localStorage.getItem('selectedExamId');
+        if (!selectedExamId) {
+          setError('No exam selected. Please choose an exam from the selection page.');
+          setLoading(false);
+          return;
+        }
+
+        // Check if student already submitted this exam (server-side guard)
+        try {
+          const check = await submissionAPI.checkSubmission(selectedExamId);
+          if (check.submitted) {
+            setAlreadySubmitted(true);
+            setLoading(false);
+            return;
           }
+        } catch (checkErr) {
+          // If check fails, proceed — submission API will reject duplicate anyway
+          console.warn('Could not verify submission status:', checkErr.message);
+        }
+
+        const examData = await examAPI.getById(selectedExamId);
+        setExam(examData);
+        setTimeLeft(examData.duration * 60);
+
+        // Log exam start
+        try {
+          await incidentAPI.report({
+            examId: examData._id,
+            eventLabel: 'Exam Started',
+            eventSub: 'Candidate entered and initialized exam environment.',
+            eventType: 'start',
+          });
+        } catch (e) {
+          console.error('Failed to log exam start event:', e);
         }
       } catch (err) {
-        setError(err.message || 'Failed to load exam papers.');
+        setError(err.message || 'Failed to load exam paper.');
       } finally {
         setLoading(false);
       }
     };
-    fetchExams();
+    fetchExam();
   }, []);
 
+  // Timer countdown
   useEffect(() => {
-    if (loading || error || submitting || !exam) return;
+    if (loading || error || submitting || !exam || alreadySubmitted) return;
     const t = setInterval(() => {
       setTimeLeft(s => {
         if (s <= 1) {
@@ -85,35 +140,41 @@ export default function ExamPage() {
       });
     }, 1000);
     return () => clearInterval(t);
-  }, [loading, error, submitting, exam, selected, handleSubmitExam]);
+  }, [loading, error, submitting, exam, selected, handleSubmitExam, alreadySubmitted]);
 
-  // Proctoring: tab switching detection
+  // Proctoring: tab switch detection
   useEffect(() => {
-    if (!exam) return;
+    if (!exam || submitting || alreadySubmitted) return;
 
-    let localRisk = 0;
-    const handleVisibilityChange = async () => {
+    const handleVisibilityChange = () => {
       if (document.hidden) {
-        localRisk = Math.min(100, localRisk + 25);
-        try {
-          await incidentAPI.report({
-            examId: exam._id,
-            riskScore: localRisk,
-            eventLabel: 'Tab Switch Detected',
-            eventSub: `Candidate navigated away from testing window. Risk score escalated.`,
-            eventType: 'tab_switch',
-          });
-        } catch (err) {
-          console.error('Failed to log proctoring incident:', err);
-        }
+        setWarningsCount(prev => prev + 1);
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [exam]);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [exam, submitting, alreadySubmitted]);
+
+  // Handle warnings
+  useEffect(() => {
+    if (warningsCount === 0 || !exam) return;
+
+    if (warningsCount > 3) {
+      handleCancelExam(selected, exam);
+    } else {
+      incidentAPI.report({
+        examId: exam._id,
+        riskScore: Math.min(100, warningsCount * 25),
+        eventLabel: `Tab Switch Warning #${warningsCount}`,
+        eventSub: `Candidate switched tab/minimized exam window (Warning ${warningsCount}/3).`,
+        eventType: 'tab_switch',
+        incidentSnapshot: verifiedPhoto || '',
+      }).catch(err => console.error(err));
+
+      setShowWarningModal(true);
+    }
+  }, [warningsCount, exam, handleCancelExam, selected, verifiedPhoto]);
 
   const fmt = (s) => {
     const m = Math.floor(s / 60);
@@ -149,11 +210,38 @@ export default function ExamPage() {
     );
   }
 
+  // Already submitted guard
+  if (alreadySubmitted) {
+    return (
+      <div className="page-wrapper" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', padding: 24 }}>
+        <div style={{
+          background: 'var(--clr-high-bg)', border: '1px solid rgba(239,68,68,.2)',
+          borderRadius: 'var(--r-lg)', padding: '32px 24px', textAlign: 'center', maxWidth: 400,
+        }}>
+          <AlertTriangle size={48} color="var(--clr-high)" style={{ margin: '0 auto 16px' }} />
+          <h2 style={{ fontSize: 'var(--fs-headline-md)', fontWeight: 700, color: 'var(--clr-high)', marginBottom: 8 }}>
+            Exam Already Submitted
+          </h2>
+          <p style={{ color: 'var(--clr-neutral)', fontSize: 'var(--fs-label-md)', marginBottom: 24, lineHeight: 1.5 }}>
+            You have already submitted this exam. Each assessment can only be attempted once.
+          </p>
+          <button className="btn btn-primary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (error || !exam) {
     return (
       <div className="page-wrapper" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', padding: 20 }}>
-        <p style={{ fontWeight: 600, color: 'var(--clr-high)', marginBottom: 12 }}>{error || 'No active exam paper found.'}</p>
-        <button className="btn btn-primary" onClick={() => navigate('/')}>Return to Login</button>
+        <p style={{ fontWeight: 600, color: 'var(--clr-high)', marginBottom: 12 }}>
+          {error || 'No exam found. Please return to the selection page.'}
+        </p>
+        <button className="btn btn-primary" onClick={() => navigate('/exam-select')}>
+          Go to Exam Selection
+        </button>
       </div>
     );
   }
@@ -208,7 +296,7 @@ export default function ExamPage() {
               marginBottom: 16,
               color: 'var(--clr-neutral)',
             }}>
-              {q.type} • {q.points} POINTS
+              {q.type} • {q.marks ?? 1} POINTS
             </div>
 
             <h2 style={{ fontSize: 'var(--fs-headline-lg)', fontWeight: 700, lineHeight: 1.4, marginBottom: 24 }}>
@@ -219,7 +307,7 @@ export default function ExamPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {q.options.map((opt, i) => {
                 const letter = String.fromCharCode(65 + i);
-                const isSelected = selected[qIndex] === i;
+                const isSelectedOpt = selected[qIndex] === i;
                 return (
                   <button
                     key={i}
@@ -231,19 +319,19 @@ export default function ExamPage() {
                       gap: 14,
                       padding: '16px',
                       borderRadius: 'var(--r-md)',
-                      border: `1.5px solid ${isSelected ? 'var(--clr-primary)' : 'var(--clr-border)'}`,
-                      background: isSelected ? 'var(--clr-white)' : 'var(--clr-white)',
+                      border: `1.5px solid ${isSelectedOpt ? 'var(--clr-primary)' : 'var(--clr-border)'}`,
+                      background: isSelectedOpt ? 'rgba(16,185,129,0.05)' : 'var(--clr-white)',
                       textAlign: 'left',
                       transition: 'border-color .18s, background .18s',
                       cursor: 'pointer',
-                      boxShadow: isSelected ? 'var(--shadow-card)' : 'none',
+                      boxShadow: isSelectedOpt ? 'var(--shadow-card)' : 'none',
                     }}
                   >
                     <span style={{
                       width: 32, height: 32, borderRadius: '50%',
-                      border: `1.5px solid ${isSelected ? 'var(--clr-primary)' : 'var(--clr-border)'}`,
-                      background: isSelected ? 'var(--clr-primary)' : 'var(--clr-white)',
-                      color: isSelected ? 'var(--clr-white)' : 'var(--clr-neutral)',
+                      border: `1.5px solid ${isSelectedOpt ? 'var(--clr-primary)' : 'var(--clr-border)'}`,
+                      background: isSelectedOpt ? 'var(--clr-primary)' : 'var(--clr-white)',
+                      color: isSelectedOpt ? 'var(--clr-white)' : 'var(--clr-neutral)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       flexShrink: 0,
                       fontWeight: 700,
@@ -252,7 +340,7 @@ export default function ExamPage() {
                     }}>
                       {letter}
                     </span>
-                    <span style={{ fontSize: 'var(--fs-body-md)', lineHeight: 1.6, paddingTop: 4 }}>{opt}</span>
+                    <span style={{ fontSize: 'var(--fs-body-md)', lineHeight: 1.6, paddingTop: 4, color: 'var(--clr-text)' }}>{opt}</span>
                   </button>
                 );
               })}
@@ -279,10 +367,19 @@ export default function ExamPage() {
             </div>
             <div style={{
               height: 90,
-              background: 'linear-gradient(160deg, #1e293b, #334155)',
+              background: '#0f172a',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden',
             }}>
-              <div style={{ width: 40, height: 50, borderRadius: '50%', background: 'rgba(255,255,255,.15)' }} />
+              {verifiedPhoto ? (
+                <img
+                  src={verifiedPhoto}
+                  alt="Verified Photo"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : (
+                <div style={{ width: 40, height: 50, borderRadius: '50%', background: 'rgba(255,255,255,.15)' }} />
+              )}
             </div>
             <div style={{ background: 'var(--clr-primary)', padding: '4px 8px', textAlign: 'center' }}>
               <span style={{ color: 'rgba(255,255,255,.7)', fontSize: 9 }}>Status: Secure</span>
@@ -342,6 +439,50 @@ export default function ExamPage() {
           {submitting ? 'Submitting...' : qIndex < questions.length - 1 ? 'Save & Next →' : 'Submit Exam →'}
         </button>
       </div>
+
+      {/* Warning Modal */}
+      {showWarningModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
+          zIndex: 9999, padding: '20px',
+        }}>
+          <div style={{
+            background: 'var(--clr-white)',
+            borderRadius: 'var(--r-lg)',
+            padding: '30px 24px',
+            maxWidth: '400px',
+            width: '100%',
+            textAlign: 'center',
+            boxShadow: 'var(--shadow-float)',
+            border: '2px solid var(--clr-high)',
+          }}>
+            <div style={{
+              width: '60px', height: '60px', borderRadius: '50%',
+              backgroundColor: 'var(--clr-high-bg)', color: 'var(--clr-high)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '32px', margin: '0 auto 16px',
+            }}>
+              ⚠️
+            </div>
+            <h3 style={{ fontSize: 'var(--fs-headline-md)', fontWeight: 700, color: 'var(--clr-high)', marginBottom: 10 }}>
+              Tab Switch Detected!
+            </h3>
+            <p style={{ fontSize: 'var(--fs-body-md)', color: 'var(--clr-neutral)', lineHeight: 1.5, marginBottom: 20 }}>
+              Warning <strong>{warningsCount} of 3</strong>.<br />
+              Please do not navigate away from this exam screen. Switching tabs more than 3 times will result in <strong>automatic cancellation</strong> of your exam.
+            </p>
+            <button
+              className="btn btn-primary"
+              style={{ width: '100%', background: 'var(--clr-high)', borderColor: 'var(--clr-high)' }}
+              onClick={() => setShowWarningModal(false)}
+            >
+              I Understand & Return
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

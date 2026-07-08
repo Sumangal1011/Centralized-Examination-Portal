@@ -151,6 +151,17 @@ export default function IncidentReviewPage() {
           )}
         </div>
 
+        {/* View answers link */}
+        {incident.exam?._id && (
+          <button
+            className="btn btn-secondary"
+            style={{ width: '100%', height: 46, marginBottom: 20, background: 'var(--clr-surface-high)', borderColor: 'var(--clr-border)', fontWeight: 600 }}
+            onClick={() => navigate(`/exam-submissions/${incident.exam._id}`)}
+          >
+            🔍 Review Student Answers Sheet
+          </button>
+        )}
+
         {/* Suspicious Activity Score */}
         <div className="card" style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 'var(--fs-label-md)', fontWeight: 500, color: 'var(--clr-neutral)', marginBottom: 8 }}>
@@ -177,11 +188,17 @@ export default function IncidentReviewPage() {
             {/* Reference image */}
             <div>
               <div style={{
-                height: 100, borderRadius: 8, background: 'linear-gradient(135deg,#cbd5e1,#94a3b8)',
+                height: 100, borderRadius: 8, background: '#0f172a',
                 marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 overflow: 'hidden'
               }}>
-                {incident.student?.avatar ? (
+                {incident.referenceImage ? (
+                  <img src={incident.referenceImage} alt="Reference" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : incident.student?.photoLink ? (
+                  <img src={incident.student.photoLink} alt="Reference" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : incident.student?.faceImageLink ? (
+                  <img src={incident.student.faceImageLink} alt="Reference" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : incident.student?.avatar ? (
                   <img src={incident.student.avatar} alt="Reference" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 ) : (
                   <div style={{ width: 40, height: 50, borderRadius: '50%', background: 'rgba(255,255,255,.4)' }} />
@@ -193,10 +210,15 @@ export default function IncidentReviewPage() {
             <div>
               <div style={{
                 height: 100, borderRadius: 8, border: `2px solid ${riskColor}`,
-                background: 'linear-gradient(135deg,#fecaca,#f87171)',
+                background: '#0f172a',
                 marginBottom: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                overflow: 'hidden'
               }}>
-                <div style={{ width: 40, height: 50, borderRadius: '50%', background: 'rgba(255,255,255,.3)' }} />
+                {incident.incidentSnapshot ? (
+                  <img src={incident.incidentSnapshot} alt="Snapshot" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: 40, height: 50, borderRadius: '50%', background: 'rgba(255,255,255,.3)' }} />
+                )}
               </div>
               <div style={{ fontSize: 11, color: riskColor, textAlign: 'center', fontWeight: 600 }}>
                 Incident Snapshot
