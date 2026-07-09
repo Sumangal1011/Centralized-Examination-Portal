@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bookmark, ChevronLeft, AlertTriangle } from 'lucide-react';
 import { examAPI, submissionAPI, incidentAPI } from '../utils/api';
@@ -18,6 +18,7 @@ export default function ExamPage() {
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [verifiedPhoto, setVerifiedPhoto] = useState(null);
   const [alreadySubmitted, setAlreadySubmitted] = useState(false);
+  const lastProcessedWarningRef = useRef(0);
 
   useEffect(() => {
     const photo = localStorage.getItem('verifiedPhoto');
@@ -159,6 +160,9 @@ export default function ExamPage() {
   // Handle warnings
   useEffect(() => {
     if (warningsCount === 0 || !exam) return;
+
+    if (warningsCount === lastProcessedWarningRef.current) return;
+    lastProcessedWarningRef.current = warningsCount;
 
     if (warningsCount > 3) {
       handleCancelExam(selected, exam);
