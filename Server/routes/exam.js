@@ -6,7 +6,7 @@ const { protect, authorize } = require('../middleware/auth');
 // @route   POST /api/exam/create
 // @desc    Upload/Create a new exam paper
 // @access  Private/Admin
-router.post('/create', protect, authorize('admin'), async (req, res) => {
+router.post('/create', protect, authorize('admin', 'examiner'), async (req, res) => {
   const { title, subject, duration, questions, status } = req.body;
 
   try {
@@ -14,11 +14,20 @@ router.post('/create', protect, authorize('admin'), async (req, res) => {
       return res.status(400).json({ message: 'Exam must contain at least one question' });
     }
 
+    const processedQuestions = questions.map(q => {
+      const pts = q.points !== undefined ? Number(q.points) : (q.marks !== undefined ? Number(q.marks) : 1);
+      return {
+        ...q,
+        points: pts,
+        marks: pts
+      };
+    });
+
     const exam = await Exam.create({
       title,
       subject,
       duration,
-      questions,
+      questions: processedQuestions,
       status: status || 'active',
       createdBy: req.user._id,
     });

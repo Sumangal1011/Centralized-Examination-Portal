@@ -1,4 +1,16 @@
-const BASE_URL = 'http://localhost:5000/api';
+const getBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  const { protocol, hostname, port } = window.location;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return `${protocol}//${hostname}:5000/api`;
+  }
+  // Check if we are running in a built prod package where api might be on same host
+  return `/api`;
+};
+
+const BASE_URL = getBaseUrl();
 
 /**
  * Helper to fetch with JWT token and content headers
@@ -37,6 +49,11 @@ export const authAPI = {
       body: JSON.stringify({ uid, name, password, role, photoLink }),
     }),
   me: () => apiRequest('/auth/me'),
+  registerFace: (uid, descriptor) =>
+    apiRequest('/auth/register-face', {
+      method: 'POST',
+      body: JSON.stringify({ uid, descriptor }),
+    }),
 };
 
 export const examAPI = {

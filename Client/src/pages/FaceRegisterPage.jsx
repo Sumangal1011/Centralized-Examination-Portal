@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as faceapi from "face-api.js";
-import axios from "axios";
+import { authAPI } from "../utils/api";
 
 export default function FaceRegisterPage() {
   const videoRef = useRef(null);
@@ -72,13 +72,7 @@ export default function FaceRegisterPage() {
         localStorage.getItem("user")
       );
 
-      await axios.post(
-        "http://localhost:5000/api/auth/register-face",
-        {
-          uid: user.uid,
-          descriptor,
-        }
-      );
+      await authAPI.registerFace(user.uid, descriptor);
 
       alert("Face registered successfully");
     } catch (error) {

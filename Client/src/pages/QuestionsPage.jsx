@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, ArrowLeft, Trash2, CheckCircle, Clock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Plus, ArrowLeft, Trash2, Clock } from 'lucide-react';
 import TopBar from '../components/TopBar';
 import BottomNav from '../components/BottomNav';
 import { examAPI } from '../utils/api';
 
 export default function QuestionsPage() {
+  const navigate = useNavigate();
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -28,6 +30,9 @@ export default function QuestionsPage() {
 
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isAdmin = user.role === 'admin';
+  const isExaminer = user.role === 'examiner';
+  const isStaff = isAdmin || isExaminer;
+  const isStudent = user.role === 'student';
 
   const fetchExams = async () => {
     try {
@@ -344,7 +349,7 @@ export default function QuestionsPage() {
                       <span style={{ fontSize: 11, color: 'var(--clr-neutral)' }}>
                         Created by: {exam.createdBy?.name || 'Academic Board'}
                       </span>
-                      {!isAdmin && (
+                      {isStudent && (
                         <button
                           className="btn btn-primary"
                           style={{ height: 34, padding: '0 14px', width: 'auto', fontSize: 12 }}
@@ -368,7 +373,7 @@ export default function QuestionsPage() {
       </div>
 
       {/* Floating Action Button for Admins to Add Exam */}
-      {isAdmin && !isCreating && (
+      {isStaff && !isCreating && (
         <button
           id="btn-add-question"
           aria-label="Add new exam paper"

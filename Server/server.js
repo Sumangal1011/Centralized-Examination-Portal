@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const mongoose = require('mongoose');
 const connectDB = async () => {
   // Connect to DB using config/db
@@ -13,6 +14,8 @@ const app = express();
 // Middlewares
 app.use(cors());
 app.use(express.json());
+app.use('/images', express.static(path.join(__dirname, 'images')));
+
 
 // Routes configuration
 app.use('/api/auth', require('./routes/auth'));

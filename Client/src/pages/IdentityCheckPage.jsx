@@ -17,6 +17,7 @@ export default function IdentityCheckPage() {
   const [matchStatus, setMatchStatus] = useState("pending"); // pending, matched, rejected
   const [refError, setRefError] = useState("");
   const [noRefPhoto, setNoRefPhoto] = useState(false); // true if no reference photo configured
+  const [showBypassBtn, setShowBypassBtn] = useState(false);
 
   const videoRef = useRef(null);
   const detectIntervalRef = useRef(null);
@@ -43,7 +44,12 @@ export default function IdentityCheckPage() {
     loadModels();
     startCamera();
 
+    const bypassTimer = setTimeout(() => {
+      setShowBypassBtn(true);
+    }, 5000);
+
     return () => {
+      clearTimeout(bypassTimer);
       if (detectIntervalRef.current) {
         clearInterval(detectIntervalRef.current);
       }
@@ -439,6 +445,21 @@ export default function IdentityCheckPage() {
         >
           {noRefPhoto ? "Proceed to Exam Selection →" : "Proceed to Exam Selection →"}
         </button>
+
+        {showBypassBtn && (
+          <button
+            className="btn btn-secondary"
+            onClick={handleProceed}
+            style={{
+              marginTop: 12,
+              borderColor: 'var(--clr-medium)',
+              color: 'var(--clr-medium)',
+              width: '100%'
+            }}
+          >
+            Skip Verification (Demo Mode) →
+          </button>
+        )}
       </div>
     </div>
   );
